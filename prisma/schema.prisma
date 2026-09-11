@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model appointments {
+  id                                        BigInt                       @id @default(autoincrement())
+  clinic_id                                 BigInt
+  patient_user_id                           BigInt
+  doctor_user_id                            BigInt
+  created_by                                BigInt?
+  scheduled_at                              DateTime                     @db.DateTime(0)
+  token_number                              Int?
+  token_date                                DateTime?                    @db.Date
+  status                                    appointments_status?         @default(scheduled)
+  payment_status                            appointments_payment_status? @default(unpaid)
+  notes                                     String?                      @db.Text
+  extra                                     Json?
+  created_at                                DateTime?                    @default(now()) @db.Timestamp(0)
+  updated_at                                DateTime?                    @default(now()) @db.Timestamp(0)
+  appointment_fee                           Decimal?                     @db.Decimal(10, 2)
+  clinics                                   clinics                      @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_app_clinic")
+  users_appointments_doctor_user_idTousers  users                        @relation("appointments_doctor_user_idTousers", fields: [doctor_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_app_doctor")
+  users_appointments_patient_user_idTousers users                        @relation("appointments_patient_user_idTousers", fields: [patient_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_app_patient")
+  clinic_sales                              clinic_sales[]
+
+  @@index([patient_user_id], map: "fk_app_patient")
+  @@index([clinic_id, token_date, token_number], map: "idx_appointments_clinic_date")
+  @@index([doctor_user_id, scheduled_at], map: "idx_appointments_doctor_sched")
+}
+
+model clinic_sales {
+  id              BigInt                       @id @default(autoincrement())
+  clinic_id       BigInt
+  appointment_id  BigInt?
+  patient_user_id BigInt?
+  created_by      BigInt?
+  amount          Decimal                      @db.Decimal(12, 2)
+  currency        String?                      @default("PKR") @db.VarChar(10)
+  payment_method  clinic_sales_payment_method? @default(cash)
+  status          clinic_sales_status?         @default(completed)
+  recorded_at     DateTime?                    @default(now()) @db.Timestamp(0)
+  notes           String?                      @db.Text
+  appointments    appointments?                @relation(fields: [appointment_id], references: [id], onUpdate: NoAction, map: "fk_sale_appointment")
+  clinics         clinics                      @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_sale_clinic")
+  users           users?                       @relation(fields: [patient_user_id], references: [id], onUpdate: NoAction, map: "fk_sale_patient")
+
+  @@index([appointment_id], map: "fk_sale_appointment")
+  @@index([patient_user_id], map: "fk_sale_patient")
+  @@index([clinic_id, recorded_at], map: "idx_sales_clinic_date")
+}
+
+model clinic_token_counters {
+  clinic_id  BigInt
+  token_date DateTime @db.Date
+  last_token Int      @default(0)
+  clinics    clinics  @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tcounter_clinic")
+
+  @@id([clinic_id, token_date])
+}
+
+model clinic_user_roles {
+  id          BigInt    @id @default(autoincrement())
+  clinic_id   BigInt
+  user_id     BigInt
+  role_id     Int
+  assigned_by BigInt?
+  assigned_at DateTime? @default(now()) @db.Timestamp(0)
+  clinics     clinics   @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cur_clinic")
+  roles       roles     @relation(fields: [role_id], references: [id], onUpdate: NoAction, map: "fk_cur_role")
+  users       users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cur_user")
+
+  @@unique([clinic_id, user_id, role_id], map: "ux_clinic_user_role")
+  @@index([role_id], map: "fk_cur_role")
+  @@index([user_id], map: "fk_cur_user")
+}
+
+model clinics {
+  id                    BigInt                  @id @default(autoincrement())
+  name                  String                  @db.VarChar(255)
+  code                  String?                 @db.VarChar(50)
+  address               String?                 @db.Text
+  owner_user_id         BigInt?
+  phone                 String?                 @db.VarChar(30)
+  is_active             Boolean?                @default(true)
+  created_at            DateTime?               @default(now()) @db.Timestamp(0)
+  updated_at            DateTime?               @default(now()) @db.Timestamp(0)
+  appointments          appointments[]
+  clinic_sales          clinic_sales[]
+  clinic_token_counters clinic_token_counters[]
+  clinic_user_roles     clinic_user_roles[]
+  users                 users?                  @relation(fields: [owner_user_id], references: [id], onUpdate: NoAction, map: "fk_clinic_owner")
+  doctor_clinics        doctor_clinics[]
+
+  @@index([owner_user_id], map: "fk_clinic_owner")
+}
+
+model doctor_clinics {
+  id        BigInt    @id @default(autoincrement())
+  doctor_id BigInt
+  clinic_id BigInt
+  is_active Boolean?  @default(true)
+  joined_at DateTime? @default(now()) @db.Timestamp(0)
+  clinics   clinics   @relation(fields: [clinic_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_doctor_clinic")
+  users     users     @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_doctor_clinic_user")
+
+  @@unique([doctor_id, clinic_id], map: "ux_doctor_clinic")
+  @@index([doctor_id], map: "idx_doctor_id")
+  @@index([clinic_id], map: "idx_clinic_id")
+}
+
+model doctor_profiles {
+  id             BigInt   @id @default(autoincrement())
+  user_id        BigInt   @unique(map: "user_id")
+  qualifications String?  @db.VarChar(255)
+  specialization String?  @db.VarChar(255)
+  license_no     String?  @db.VarChar(100)
+  bio            String?  @db.Text
+  is_active      Boolean? @default(true)
+  users          users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_doc_user")
+}
+
+model front_desk_staff {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt   @unique
+  shift      String?  @db.VarChar(100)
+  status     String?  @default("active") @db.VarChar(50)
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model patient_profiles {
+  id                BigInt  @id @default(autoincrement())
+  user_id           BigInt  @unique(map: "user_id")
+  medical_record_no String? @unique(map: "medical_record_no") @db.VarChar(100)
+  blood_group       String? @db.VarChar(10)
+  emergency_contact Json?
+  extra             Json?
+  users             users   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_patient_user")
+}
+
+model roles {
+  id                Int                 @id @default(autoincrement())
+  name              String              @unique(map: "name") @db.VarChar(50)
+  description       String?             @db.VarChar(255)
+  clinic_user_roles clinic_user_roles[]
+}
+
+model schedule {
+  schedule_id Int       @id @default(autoincrement())
+  doctor_id   Int
+  clinic_id   Int
+  monday      Json
+  tuesday     Json
+  wednesday   Json
+  thursday    Json
+  friday      Json
+  saturday    Json
+  sunday      Json
+  created_at  DateTime? @default(now()) @db.Timestamp(0)
+  updated_at  DateTime? @default(now()) @updatedAt @db.Timestamp(0)
+}
+
+model users {
+  id                                               BigInt              @id @default(autoincrement())
+  email                                            String?             @unique(map: "email") @db.VarChar(255)
+  password_hash                                    String?             @db.VarChar(255)
+  full_name                                        String              @db.VarChar(200)
+  phone                                            String?             @db.VarChar(30)
+  dob                                              DateTime?           @db.Date
+  gender                                           users_gender?
+  extra                                            Json?
+  is_active                                        Boolean?            @default(true)
+  created_at                                       DateTime?           @default(now()) @db.Timestamp(0)
+  updated_at                                       DateTime?           @default(now()) @db.Timestamp(0)
+  appointments_appointments_doctor_user_idTousers  appointments[]      @relation("appointments_doctor_user_idTousers")
+  appointments_appointments_patient_user_idTousers appointments[]      @relation("appointments_patient_user_idTousers")
+  clinic_sales                                     clinic_sales[]
+  clinic_user_roles                                clinic_user_roles[]
+  clinics                                          clinics[]
+  doctor_clinics                                   doctor_clinics[]
+  doctor_profiles                                  doctor_profiles?
+  front_desk_staff                                 front_desk_staff?
+  patient_profiles                                 patient_profiles?
+}
+
+enum users_gender {
+  M
+  F
+  O
+}
+
+enum clinic_sales_payment_method {
+  cash
+  card
+  bank_transfer
+  mobile_wallet
+  other
+}
+
+enum clinic_sales_status {
+  pending
+  completed
+  refunded
+}
+
+enum appointments_status {
+  scheduled
+  checked_in
+  in_consult
+  completed
+  cancelled
+}
+
+enum appointments_payment_status {
+  unpaid
+  partial
+  paid
+}

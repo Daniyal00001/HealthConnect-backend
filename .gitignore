@@ -1,0 +1,22 @@
+node_modules
+.env
+dist
+build
+
+/generated/prisma
+.vercel
+.env*
+
+# Local credentials and sensitive deployment artifacts
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+passwords.txt
+update_passwords.sql
+updateAdminPassword.js
+
+
+.env.local
+ca.pem
