@@ -1,4 +1,4 @@
-# HealthConnect
+# HealthConnect -- Backend
 
 HealthConnect is a full-stack healthcare platform designed to connect patients with healthcare services through a centralized digital system.
 
